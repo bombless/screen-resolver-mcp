@@ -1,6 +1,6 @@
 # screen-resolver-mcp
 
-A TypeScript MCP server for identifying songs and artists from the KTV screenshots in [for1096/songs](https://huggingface.co/datasets/for1096/songs), plus a small searchable results website.
+A TypeScript MCP server for identifying songs and artists from the KTV screenshots in [for1096/songs](https://huggingface.co/datasets/for1096/songs), plus a searchable results website.
 
 ## Exactly two MCP tools
 
@@ -9,7 +9,7 @@ A TypeScript MCP server for identifying songs and artists from the KTV screensho
 
 The MCP does not perform its own vision-model inference. ChatGPT/the connected model inspects the returned images and calls the submission tool with its recognition results.
 
-## Persistence guarantees
+## Append-only persistence
 
 Results are stored in `data/songs.sqlite` by default. Each submission creates a new batch and new recognition rows. There are no update/delete operations or uniqueness constraints that silently discard repeated observations. The same song or screenshot may appear in multiple batches, preserving recognition history. Back up the `data` directory to preserve records.
 
@@ -23,7 +23,15 @@ npm run build
 npm run dev
 ```
 
-The MCP server uses stdio transport. For a local MCP client, configure its command as `node` with arguments `/absolute/path/to/screen-resolver-mcp/dist/index.js` after building.
+The MCP stdio entrypoint is suitable for local MCP clients. Configure the command as `node` with arguments `/absolute/path/to/screen-resolver-mcp/dist/index.js` after building.
+
+For a remote MCP host that supports Streamable HTTP, run:
+
+```sh
+npm run http
+```
+
+The endpoint is `http://localhost:8787/mcp`; deploy it behind HTTPS and configure authentication at the hosting/reverse-proxy layer before registering it as a remote ChatGPT connector. A publicly reachable URL alone does not make a local service accessible.
 
 Run the results website separately:
 
@@ -36,16 +44,13 @@ Then open http://localhost:3000. Both processes use the same `DATA_DIR` (default
 ## Configuration
 
 - `HF_DATASET_ID`: defaults to `for1096/songs`.
-- `SCREENSHOT_START`: starting index for the first screenshot batch (defaults to `0`). The implementation lists repository image files and returns 20 in stable path order.
+- `SCREENSHOT_START`: starting index for the screenshot batch (defaults to `0`).
 - `DATA_DIR`: SQLite data directory (defaults to `data`).
-- `PORT`: website port (defaults to `3000`).
-
-## Connect ChatGPT
-
-Deploy the MCP server behind a publicly reachable HTTPS MCP endpoint using a host that supports the MCP transport expected by ChatGPT. This repository's MCP entrypoint currently uses stdio for local MCP clients; a hosted deployment adapter (for example, Streamable HTTP) and the host's required authentication should be configured before registering it as a remote ChatGPT connector.
+- `PORT`: results website port (defaults to `3000`).
+- `MCP_PORT`: Streamable HTTP MCP port (defaults to `8787`).
 
 ## Notes
 
-- Dataset file layout can change; screenshot discovery is performed via the Hugging Face Hub tree API.
+- Dataset file layout and Hugging Face API pagination may change; verify screenshot discovery against the live dataset before a large batch run.
 - Do not expose the results website publicly without appropriate access controls if the records should remain private.
 - This repository stores model outputs as historical observations, not verified ground truth.
