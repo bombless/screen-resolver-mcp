@@ -5,3 +5,5 @@ data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+# Runtime caches
+data/cache/
