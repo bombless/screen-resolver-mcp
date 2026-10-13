@@ -103,6 +103,11 @@ async function getInventory(): Promise<HubEntry[]> {
 
 export type Screenshot = { id: string; url: string };
 
+export async function getScreenshotTotalCount(): Promise<number> {
+  const entries = await getInventory();
+  return entries.filter(e => e.path && /\.(png|jpe?g|webp|gif|bmp)$/i.test(e.path)).length;
+}
+
 export async function getScreenshots(count = 4, excludeIds: string[] = []): Promise<Screenshot[]> {
   const entries = await getInventory();
   const images = entries.filter(e => e.path && /\.(png|jpe?g|webp|gif|bmp)$/i.test(e.path))

@@ -10,8 +10,8 @@ import { appendRecognitions, getDeliveredScreenshotIds, getSubmittedScreenshotId
 function createServer() {
   const server = new McpServer({ name: "screen-resolver-mcp", version: "0.1.0" });
   server.tool("get_screenshots",
-    "Fetch up to 4 KTV song-list screenshots. By default returns screenshots not previously sent by this MCP and not yet submitted via submit_song_recognitions. Set fresh=false to allow previously sent screenshots again (submitted screenshots are still excluded). If no unseen screenshots remain, the tool cycles through the dataset and explains this in the result.",
-    { count: z.number().int().min(1).max(4).optional().default(4), fresh: z.boolean().optional().default(true) },
+    "Fetch a batch of up to 20 KTV song-list screenshots (default 8 to reduce tool-call overhead). Inspect every returned image, then submit all recognized songs in one submit_song_recognitions call before fetching another batch. By default returns screenshots not previously sent by this MCP and not yet submitted. Set fresh=false to allow previously sent screenshots again (submitted screenshots are still excluded). Response metadata includes batch size and whether the available unseen pool was exhausted.",
+    { count: z.number().int().min(1).max(20).optional().default(8), fresh: z.boolean().optional().default(true) },
     async ({ count, fresh }) => {
       try {
         const submitted = getSubmittedScreenshotIds();
@@ -22,7 +22,7 @@ function createServer() {
         const repeated = screenshots.some(item => submitted.includes(item.id) || delivered.includes(item.id));
         const content = await screenshotContent(screenshots);
         markScreenshotsDelivered(screenshots.map(item => item.id));
-        content[0] = { type: "text", text: JSON.stringify({ count: screenshots.length, freshRequested: fresh, excludedSubmitted: submitted.length, excludedPreviouslyDelivered: delivered.length, repeatedBecausePoolExhausted: repeated, screenshots, ...(repeated ? { note: "No unseen screenshots remained; this batch includes previously delivered or submitted items." } : {}) }, null, 2) };
+        content[0] = { type: "text", text: JSON.stringify({ count: screenshots.length, requestedCount: count, hasMoreUnseen: allAvailable.length > screenshots.length && !repeated, freshRequested: fresh, excludedSubmitted: submitted.length, excludedPreviouslyDelivered: delivered.length, repeatedBecausePoolExhausted: repeated, screenshots, ...(repeated ? { note: "No unseen screenshots remained; this batch includes previously delivered or submitted items." } : {}) }, null, 2) };
         return { content };
       } catch (error) {
         console.error(JSON.stringify({ ts: new Date().toISOString(), level: "error", component: "get-screenshots", event: "tool_failed", error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error) }));

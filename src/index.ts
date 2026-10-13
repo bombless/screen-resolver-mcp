@@ -9,12 +9,14 @@ const server = new McpServer({ name: "screen-resolver-mcp", version: "0.1.0" });
 
 server.tool(
   "get_screenshots",
-  "Fetch the next batch of up to 4 KTV song-list screenshots from the for1096/songs Hugging Face dataset. Return screenshot IDs, image URLs, and MCP image content blocks for visual inspection.",
-  { },
-  async () => {
+  "Fetch a batch of up to 20 KTV song-list screenshots (default 8). Inspect every returned image, then submit all recognized songs in one submit_song_recognitions call before fetching another batch.",
+  { count: z.number().int().min(1).max(20).optional().default(8) },
+  async ({ count }) => {
     try {
-      const screenshots = await getScreenshots(4);
-      return { content: await screenshotContent(screenshots) };
+      const screenshots = await getScreenshots(count);
+      const content = await screenshotContent(screenshots);
+      content[0] = { type: "text", text: JSON.stringify({ count: screenshots.length, requestedCount: count, screenshots }, null, 2) };
+      return { content };
     } catch (error) {
       console.error(JSON.stringify({ ts: new Date().toISOString(), level: "error", component: "get-screenshots", event: "tool_failed", error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error) }));
       return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
