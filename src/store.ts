@@ -29,6 +29,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_song_title ON song_recognitions(song_title);
   CREATE INDEX IF NOT EXISTS idx_song_artist ON song_recognitions(artist);
   CREATE INDEX IF NOT EXISTS idx_screenshot ON song_recognitions(screenshot_id);
+  CREATE TABLE IF NOT EXISTS screenshot_deliveries (
+    screenshot_id TEXT PRIMARY KEY,
+    delivered_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 export type Recognition = {
@@ -86,4 +90,18 @@ export function getStats() {
     batches: (db.prepare("SELECT COUNT(*) AS n FROM recognition_batches").get() as { n: number }).n,
     uniqueScreenshots: (db.prepare("SELECT COUNT(DISTINCT screenshot_id) AS n FROM song_recognitions").get() as { n: number }).n
   };
+}
+
+export function getSubmittedScreenshotIds(): string[] {
+  return (db.prepare("SELECT DISTINCT screenshot_id FROM song_recognitions").all() as Array<{ screenshot_id: string }>).map(row => row.screenshot_id);
+}
+
+export function getDeliveredScreenshotIds(): string[] {
+  return (db.prepare("SELECT screenshot_id FROM screenshot_deliveries").all() as Array<{ screenshot_id: string }>).map(row => row.screenshot_id);
+}
+
+export function markScreenshotsDelivered(ids: string[]) {
+  const insert = db.prepare("INSERT OR IGNORE INTO screenshot_deliveries (screenshot_id) VALUES (?)");
+  const transaction = db.transaction(() => ids.forEach(id => insert.run(id)));
+  transaction();
 }

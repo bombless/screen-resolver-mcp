@@ -5,17 +5,25 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { getScreenshots } from "./dataset.js";
 import { screenshotContent } from "./images.js";
-import { appendRecognitions } from "./store.js";
+import { appendRecognitions, getDeliveredScreenshotIds, getSubmittedScreenshotIds, markScreenshotsDelivered } from "./store.js";
 
 function createServer() {
   const server = new McpServer({ name: "screen-resolver-mcp", version: "0.1.0" });
   server.tool("get_screenshots",
-    "Fetch up to 4 KTV song-list screenshots from the for1096/songs Hugging Face dataset. Return screenshot IDs, image URLs, and MCP image content blocks for visual inspection.",
-    {},
-    async () => {
+    "Fetch up to 4 KTV song-list screenshots. By default returns screenshots not previously sent by this MCP and not yet submitted via submit_song_recognitions. Set fresh=false to allow previously sent screenshots again (submitted screenshots are still excluded). If no unseen screenshots remain, the tool cycles through the dataset and explains this in the result.",
+    { count: z.number().int().min(1).max(4).optional().default(4), fresh: z.boolean().optional().default(true) },
+    async ({ count, fresh }) => {
       try {
-        const screenshots = await getScreenshots(4);
-        return { content: await screenshotContent(screenshots) };
+        const submitted = getSubmittedScreenshotIds();
+        const delivered = fresh ? getDeliveredScreenshotIds() : [];
+        const excluded = [...new Set([...submitted, ...delivered])];
+        const allAvailable = await getScreenshots(100000, excluded);
+        const screenshots = allAvailable.slice(0, count);
+        const repeated = screenshots.some(item => submitted.includes(item.id) || delivered.includes(item.id));
+        const content = await screenshotContent(screenshots);
+        markScreenshotsDelivered(screenshots.map(item => item.id));
+        content[0] = { type: "text", text: JSON.stringify({ count: screenshots.length, freshRequested: fresh, excludedSubmitted: submitted.length, excludedPreviouslyDelivered: delivered.length, repeatedBecausePoolExhausted: repeated, screenshots, ...(repeated ? { note: "No unseen screenshots remained; this batch includes previously delivered or submitted items." } : {}) }, null, 2) };
+        return { content };
       } catch (error) {
         console.error(JSON.stringify({ ts: new Date().toISOString(), level: "error", component: "get-screenshots", event: "tool_failed", error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error) }));
         return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };

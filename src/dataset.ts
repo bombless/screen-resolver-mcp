@@ -103,15 +103,18 @@ async function getInventory(): Promise<HubEntry[]> {
 
 export type Screenshot = { id: string; url: string };
 
-export async function getScreenshots(count = 20): Promise<Screenshot[]> {
+export async function getScreenshots(count = 4, excludeIds: string[] = []): Promise<Screenshot[]> {
   const entries = await getInventory();
   const images = entries.filter(e => e.path && /\.(png|jpe?g|webp|gif|bmp)$/i.test(e.path))
     .sort((a, b) => a.path!.localeCompare(b.path!, undefined, { numeric: true }));
   logDataset("image_inventory", { dataset: DATASET, totalEntries: entries.length, imageCount: images.length });
   if (images.length === 0) throw new Error("No image files found in the Hugging Face dataset.");
+  const excluded = new Set(excludeIds);
+  const available = images.filter(image => !excluded.has(image.path!));
+  const pool = available.length ? available : images;
   const cursor = Number(process.env.SCREENSHOT_START ?? "0");
-  const start = ((cursor % images.length) + images.length) % images.length;
-  const chosen = Array.from({ length: Math.min(count, images.length) }, (_, i) => images[(start + i) % images.length]!);
+  const start = ((cursor % pool.length) + pool.length) % pool.length;
+  const chosen = Array.from({ length: Math.min(count, pool.length) }, (_, i) => pool[(start + i) % pool.length]!);
   return chosen.map(e => ({
     id: e.path!,
     url: `https://huggingface.co/datasets/${DATASET}/resolve/main/${e.path!.split("/").map(encodeURIComponent).join("/")}`
